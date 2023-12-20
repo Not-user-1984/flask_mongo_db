@@ -63,18 +63,45 @@ def sign_up():
 
 
 # Регистрация пользователя
+@app.route('/sign-in/', methods=['POST'])
+def sign_in():
+    data = request.json
+    email = data.get('email')
+    password = data.get('password')
+
+    if not validate_credentials(email, password):
+        return jsonify({'message': 'Invalid credentials format'}), 400
+
+    user = authenticate_user(email, password)
+
+    if not user:
+        return jsonify({'message': 'Invalid email or password'}), 401
+
+    access_token = create_access_token(identity=email)
+
+    token = data.get('token')
+    if not validate_token(token, email):
+        return jsonify({'message': 'Invalid token'}), 401
+
+    return jsonify({
+        'token': access_token,
+        'name': user['name'],
+        'site': user['site'],
+        'email': user['email']
+    }), 200
+
 
 def validate_credentials(email, password):
     if not email or not password:
-        return False
-    if not validate_email(email) or not validate_password(password):
         return False
     return True
 
 
 def authenticate_user(email, password):
+    hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
     user = mongo.db.users.find_one({'email': email})
-    if not user or not bcrypt.check_password_hash(user['password'], password):
+    print(user)
+    if not user.password == hashed_password:
         return None
     return user
 
@@ -108,7 +135,7 @@ def _send_password_email(email, password):
     msg.set_content(f'Your temporary password: {password}')
     msg['Subject'] = 'Your Temporary Password'
     msg['From'] = 'your_email@example.com'
-    msg['To'] = f'{email}'
+    msg['To'] = 'test@test.com'
 
     with smtplib.SMTP('localhost', 1025) as smtp:
         smtp.send_message(msg)
