@@ -1,5 +1,6 @@
 import random
 import re
+import secrets
 import smtplib
 import string
 from datetime import timedelta
@@ -55,35 +56,10 @@ def sign_up():
         'site': new_user.site,
         'password': new_user.password
     })
-
     _send_password_email(email, temporary_password)
-
     access_token = create_access_token(identity=email)
 
     return jsonify({'token': access_token}), 200
-
-@app.route('/sign-in/', methods=['POST'])
-def sign_in():
-    data = request.json
-    email = data.get('email')
-    password = data.get('password')
-
-    if not validate_credentials(email, password):
-        return jsonify({'message': 'Invalid credentials format'}), 400
-
-    user = authenticate_user(email, password)
-
-    if not user:
-        return jsonify({'message': 'Invalid credentials'}), 401
-
-    access_token = create_access_token(identity=email)
-
-    return jsonify({
-        'token': access_token,
-        'name': user.get('name'),
-        'site': user.get('site'),
-        'email': user.get('email')
-    }), 200
 
 
 # Регистрация пользователя
@@ -126,24 +102,19 @@ def validate_token(token, email):
 
 
 def _send_password_email(email, password):
+    print(email)
+    print(password)
     msg = EmailMessage()
     msg.set_content(f'Your temporary password: {password}')
     msg['Subject'] = 'Your Temporary Password'
     msg['From'] = 'your_email@example.com'
-    msg['To'] = email
+    msg['To'] = f'{email}'
 
     with smtplib.SMTP('localhost', 1025) as smtp:
         smtp.send_message(msg)
 
 
-def validate_email(email):
-    # Простая проверка формата email
-    email_regex = r'^[\w\-.]+@[a-zA-Z\d\-.]+\.[a-zA-Z]{2,}$'
-    return re.match(email_regex, email) is not None
-
-
 def validate_password(password):
-    # Проверка пароля на соответствие требованиям (например, длина не менее 8 символов)
     return len(password) >= 8
 
 
@@ -155,18 +126,13 @@ def validate_registration_data(name, phone, email, site):
     if not all([name, phone, email, site]):
         raise ValueError('All fields are required.')
 
-    if not validate_email(email):
-        raise ValueError('Invalid email format.')
-
-    if not validate_site(site):
-        raise ValueError('Invalid site format.')
-
     return True
 
 
-def generate_temporary_password(length=10):
-    characters = string.ascii_letters + string.digits + string.punctuation
-    temporary_password = ''.join(random.choice(characters) for i in range(length))
+def generate_temporary_password():
+    digits = ''.join(secrets.choice(string.digits) for _ in range(6))
+    letters = ''.join(secrets.choice(string.ascii_letters) for _ in range(2))
+    temporary_password = ''.join(secrets.choice(digits + letters) for _ in range(8))
     return temporary_password
 
 
