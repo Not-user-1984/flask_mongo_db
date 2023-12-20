@@ -1,10 +1,13 @@
+import random
+import re
 import smtplib
+import string
 from datetime import timedelta
 from email.message import EmailMessage
 
 from flask import Flask, jsonify, request
 from flask_bcrypt import Bcrypt
-from flask_jwt_extended import create_access_token, JWTManager, decode_token
+from flask_jwt_extended import create_access_token, decode_token, JWTManager
 from flask_pymongo import PyMongo
 
 app = Flask(__name__)
@@ -26,74 +29,64 @@ class User:
         self.password = bcrypt.generate_password_hash(password).decode('utf-8')
 
 
-@app.route('/sign-in/', methods=['POST'])
-def sign_in():
+@app.route('/sign-up/', methods=['POST'])
+def sign_up():
     data = request.json
-    email = data['email']
-    password = data['password']
+    name = data.get('name')
+    phone = data.get('phone')
+    email = data.get('email')
+    site = data.get('site')
+
+    if not validate_registration_data(name, phone, email, site):
+        return jsonify({'message': 'Invalid registration data format'}), 400
 
     existing_user = mongo.db.users.find_one({'email': email})
     if existing_user:
         return jsonify({'message': 'User already exists'}), 400
 
-    access_token = create_access_token(identity=email)
+    temporary_password = generate_temporary_password()
+    hashed_password = bcrypt.generate_password_hash(temporary_password).decode('utf-8')
 
-    new_user = User(email, password)
+    new_user = User(name, phone, email, site, hashed_password)
     mongo.db.users.insert_one({
+        'name': new_user.name,
+        'phone': new_user.phone,
         'email': new_user.email,
+        'site': new_user.site,
         'password': new_user.password
     })
-    return jsonify({'token_sent_email': True},
-                   {'token': access_token},
-                   ), 200
 
+    _send_password_email(email, temporary_password)
 
-# Авторизация пользователя
-@app.route('/sign-up/', methods=['POST'])
-def sign_up():
+    access_token = create_access_token(identity=email)
+
+    return jsonify({'token': access_token}), 200
+
+@app.route('/sign-in/', methods=['POST'])
+def sign_in():
     data = request.json
-    site = data.get('site')
-    name = data.get('name')
     email = data.get('email')
     password = data.get('password')
 
-    if not email or not password:
-        return jsonify({'message': 'Invalid credentials'}), 400
+    if not validate_credentials(email, password):
+        return jsonify({'message': 'Invalid credentials format'}), 400
 
-    user = mongo.db.users.find_one({'email': email})
+    user = authenticate_user(email, password)
 
-    if not user or not bcrypt.check_password_hash(user['password'], password):
+    if not user:
         return jsonify({'message': 'Invalid credentials'}), 401
-    print(user)
 
-    auth_header = request.headers.get('Authorization')
-
-    print(auth_header)
-
-    if not auth_header:
-        return jsonify({'message': 'Missing Authorization header'}), 401
-
-    try:
-        token_type, token = auth_header.split()
-        if token_type != 'Bearer':
-            raise ValueError('Token should be of type Bearer')
-    except ValueError:
-        return jsonify({'message': 'Invalid token format'}), 401
-
-    try:
-        decoded_token = decode_token(auth_header)
-        if decoded_token['identity'] != email:
-            raise ValueError('Invalid token')
-    except:
-        return jsonify({'message': 'Invalid token'}), 401
+    access_token = create_access_token(identity=email)
 
     return jsonify({
-        'token': token,
-        'name': user['name'],
-        'site': user['site'],
-        'email': user['email']
+        'token': access_token,
+        'name': user.get('name'),
+        'site': user.get('site'),
+        'email': user.get('email')
     }), 200
 
+
+# Регистрация пользователя
 
 def validate_credentials(email, password):
     if not email or not password:
@@ -131,6 +124,7 @@ def validate_token(token, email):
     except:
         return False
 
+
 def _send_password_email(email, password):
     msg = EmailMessage()
     msg.set_content(f'Your temporary password: {password}')
@@ -141,6 +135,39 @@ def _send_password_email(email, password):
     with smtplib.SMTP('localhost', 1025) as smtp:
         smtp.send_message(msg)
 
+
+def validate_email(email):
+    # Простая проверка формата email
+    email_regex = r'^[\w\-.]+@[a-zA-Z\d\-.]+\.[a-zA-Z]{2,}$'
+    return re.match(email_regex, email) is not None
+
+
+def validate_password(password):
+    # Проверка пароля на соответствие требованиям (например, длина не менее 8 символов)
+    return len(password) >= 8
+
+
+def validate_site(site):
+    return bool(site.strip())
+
+
+def validate_registration_data(name, phone, email, site):
+    if not all([name, phone, email, site]):
+        raise ValueError('All fields are required.')
+
+    if not validate_email(email):
+        raise ValueError('Invalid email format.')
+
+    if not validate_site(site):
+        raise ValueError('Invalid site format.')
+
+    return True
+
+
+def generate_temporary_password(length=10):
+    characters = string.ascii_letters + string.digits + string.punctuation
+    temporary_password = ''.join(random.choice(characters) for i in range(length))
+    return temporary_password
 
 
 if __name__ == '__main__':
