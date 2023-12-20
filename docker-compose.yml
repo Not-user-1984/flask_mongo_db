@@ -1,0 +1,19 @@
+version: "3.9"
+services:
+
+  mailpit:
+    image: axllent/mailpit:v1.9.9
+    container_name: proxydata-mailpit
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  mongodb:
+      image: mongo
+      container_name: mongodb
+      restart: always
+      ports:
+          - 27017:27017
+
+
+
