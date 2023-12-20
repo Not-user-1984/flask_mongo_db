@@ -1,13 +1,13 @@
-import secrets
-import smtplib
-import string
+
 from datetime import timedelta
-from email.message import EmailMessage
 
 from flask import Flask, jsonify, request
 from flask_bcrypt import Bcrypt
-from flask_jwt_extended import create_access_token, decode_token, JWTManager
+from flask_jwt_extended import create_access_token, JWTManager
 from flask_pymongo import PyMongo
+
+from utilits import generate_temporary_password, send_password_email
+from validate import validate_credentials, validate_registration_data, validate_token
 
 app = Flask(__name__)
 app.config['MONGO_URI'] = 'mongodb://localhost:27017/usersdb'
@@ -53,7 +53,7 @@ def sign_up():
         'site': new_user.site,
         'password': new_user.password
     })
-    _send_password_email(email, temporary_password)
+    send_password_email(email, temporary_password)
     access_token = create_access_token(identity=email)
 
     return jsonify({'token': access_token}), 200
@@ -69,13 +69,13 @@ def sign_in():
     if not validate_credentials(email, temp_password):
         return jsonify({'message': 'Invalid credentials format'}), 400
 
-    user = authenticate_user(email, temp_password)
+    user = _authenticate_user(email, temp_password)
 
     if not user:
         return jsonify({'message': 'Invalid email or password'}), 401
 
     token = request.headers.get('Authorization')
-    if not validate_token(token):
+    if not validate_token(token, email):
         return jsonify({'message': 'Invalid token'}), 401
 
     return jsonify({
@@ -86,13 +86,9 @@ def sign_in():
     }), 200
 
 
-def validate_credentials(email, password):
-    if not email or not password:
-        return False
-    return True
 
 
-def authenticate_user(email, temp_password):
+def _authenticate_user(email, temp_password):
     user = mongo.db.users.find_one({'email': email})
     if user:
         hashed_password = user.get('password')
@@ -101,48 +97,7 @@ def authenticate_user(email, temp_password):
     return False
 
 
-def validate_token(token):
-    token_type, token = token.split()
-    if not decode_token(token):
-        return False, 401
-    if token_type != 'Bearer':
-        raise ValueError('Token should be of type Bearer')
-    return True
 
-
-def _send_password_email(email, password):
-    print(email)
-    print(password)
-    msg = EmailMessage()
-    msg.set_content(f'Your temporary password: {password}')
-    msg['Subject'] = 'Your Temporary Password'
-    msg['From'] = 'your_email@example.com'
-    msg['To'] = 'test@test.com'
-
-    with smtplib.SMTP('localhost', 1025) as smtp:
-        smtp.send_message(msg)
-
-
-def validate_password(password):
-    return len(password) >= 8
-
-
-def validate_site(site):
-    return bool(site.strip())
-
-
-def validate_registration_data(name, phone, email, site):
-    if not all([name, phone, email, site]):
-        raise ValueError('All fields are required.')
-
-    return True
-
-
-def generate_temporary_password():
-    digits = ''.join(secrets.choice(string.digits) for _ in range(6))
-    letters = ''.join(secrets.choice(string.ascii_letters) for _ in range(2))
-    temporary_password = ''.join(secrets.choice(digits + letters) for _ in range(8))
-    return temporary_password
 
 
 if __name__ == '__main__':
