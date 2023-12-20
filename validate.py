@@ -12,7 +12,6 @@ def validate_site(site):
 
 
 def validate_email(email):
-    # Простая проверка на наличие @ и .
     return bool(re.match(r"[^@]+@[^@]+\.[^@]+", email))
 
 

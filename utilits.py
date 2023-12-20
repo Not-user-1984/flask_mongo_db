@@ -4,11 +4,9 @@ import string
 from email.message import EmailMessage
 
 
-def send_password_email(email, password):
-    print(email)
-    print(password)
+def send_email(email, data, msg: str):
     msg = EmailMessage()
-    msg.set_content(f'Your temporary password: {password}')
+    msg.set_content(f'{msg}: {data}')
     msg['Subject'] = 'Your Temporary Password'
     msg['From'] = 'your_email@example.com'
     msg['To'] = 'test@test.com'

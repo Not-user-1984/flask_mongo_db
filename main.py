@@ -6,7 +6,7 @@ from flask_bcrypt import Bcrypt
 from flask_jwt_extended import create_access_token, JWTManager
 from flask_pymongo import PyMongo
 
-from utilits import generate_temporary_password, send_password_email
+from utilits import generate_temporary_password, send_email
 from validate import validate_credentials, validate_registration_data, validate_token
 
 app = Flask(__name__)
@@ -20,13 +20,13 @@ jwt = JWTManager(app)
 
 # Модель пользователя
 class User:
-    def __init__(self, name, phone, email, site, password, hash):
+    def __init__(self, name, phone, email, site, password, hash_reset):
         self.name = name
         self.phone = phone
         self.email = email
         self.site = site
         self.password = password
-        self.hash = hash
+        self.hash_reset = hash_reset
 
 
 @app.route('/sign-up/', methods=['POST'])
@@ -36,6 +36,7 @@ def sign_up():
     phone = data.get('phone')
     email = data.get('email')
     site = data.get('site')
+    hash_reset = None
 
     if not validate_registration_data(name, phone, email, site):
         return jsonify({'message': 'Invalid registration data format'}), 400
@@ -46,21 +47,21 @@ def sign_up():
 
     temporary_password = generate_temporary_password()
     hashed_password = bcrypt.generate_password_hash(temporary_password).decode('utf-8')
-    new_user = User(name, phone, email, site, hashed_password)
+    new_user = User(name, phone, email, site, hashed_password, hash_reset)
     mongo.db.users.insert_one({
         'name': new_user.name,
         'phone': new_user.phone,
         'email': new_user.email,
         'site': new_user.site,
-        'password': new_user.password
+        'password': new_user.password,
+        'hash': None
     })
-    send_password_email(email, temporary_password)
+    send_email(email, temporary_password, "Your Temporary Password")
     access_token = create_access_token(identity=email)
 
     return jsonify({'token': access_token}), 200
 
 
-# Регистрация пользователя
 @app.route('/sign-in/', methods=['POST'])
 def sign_in():
     data = request.json
@@ -87,7 +88,6 @@ def sign_in():
     }), 200
 
 
-# Отправка ссылки на смену пароля
 @app.route('/recovery/', methods=['POST'])
 def recovery():
     data = request.json
@@ -101,11 +101,12 @@ def recovery():
         return jsonify({'message': 'User not found.'}), 404
 
     hash_value = _generate_hash(email)
+    mongo.db.users.update_one(
+        {'email': email},
+        {'$set': {'hash_reset': hash_value}}
+    )
     recovery_link = f"http://127.0.0.1:5000/recovery/{hash_value}/"
-
-    # Отправка ссылки на почту пользователя
-    send_password_email(email, recovery_link)
-
+    send_email(email, recovery_link, 'Follow the links')
     return jsonify({'message': 'Recovery link sent.', 'link': recovery_link}), 200
 
 
@@ -118,22 +119,19 @@ def change_password(hash):
     if not password:
         return jsonify({'message': 'Password is required.'}), 400
 
-    user = mongo.db.users.find_one({'hash': hash})
+    user = mongo.db.users.find_one({'hash_reset': hash})
+
     if not user:
         return jsonify({'message': 'Invalid or expired recovery link.'}), 400
 
-    # Обновление пароля пользователя
     hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
-    mongo.db.users.update_one({'hash': hash}, {'$set': {'password': hashed_password}})
-
-    # Удаление хэша из базы данных
-    mongo.db.users.update_one({'hash': hash}, {'$unset': {'hash': ""}})
-
-    # Создание нового JWT Token
+    mongo.db.users.update_one({'hash_reset': hash}, {'$set': {'password': hashed_password}})
     access_token = create_access_token(identity=user['email'])
 
-    return jsonify({'token': access_token}), 200
+    mongo.db.users.update_one({'hash_reset': hash}, {'$unset': {'hash_reset': ''}})
+    user = mongo.db.users.find_one({'hash_reset': hash})
 
+    return jsonify({'token': access_token}), 200
 
 
 def _authenticate_user(email, temp_password):
@@ -145,7 +143,6 @@ def _authenticate_user(email, temp_password):
     return False
 
 
-# Генерация уникального хэша для ссылки
 def _generate_hash(email):
     return hashlib.sha256(email.encode()).hexdigest()
 
