@@ -1,5 +1,3 @@
-import random
-import re
 import secrets
 import smtplib
 import string
@@ -27,7 +25,7 @@ class User:
         self.phone = phone
         self.email = email
         self.site = site
-        self.password = bcrypt.generate_password_hash(password).decode('utf-8')
+        self.password = password
 
 
 @app.route('/sign-up/', methods=['POST'])
@@ -47,7 +45,6 @@ def sign_up():
 
     temporary_password = generate_temporary_password()
     hashed_password = bcrypt.generate_password_hash(temporary_password).decode('utf-8')
-
     new_user = User(name, phone, email, site, hashed_password)
     mongo.db.users.insert_one({
         'name': new_user.name,
@@ -67,24 +64,22 @@ def sign_up():
 def sign_in():
     data = request.json
     email = data.get('email')
-    password = data.get('password')
+    temp_password = data.get('password')
 
-    if not validate_credentials(email, password):
+    if not validate_credentials(email, temp_password):
         return jsonify({'message': 'Invalid credentials format'}), 400
 
-    user = authenticate_user(email, password)
+    user = authenticate_user(email, temp_password)
 
     if not user:
         return jsonify({'message': 'Invalid email or password'}), 401
 
-    access_token = create_access_token(identity=email)
-
-    token = data.get('token')
-    if not validate_token(token, email):
+    token = request.headers.get('Authorization')
+    if not validate_token(token):
         return jsonify({'message': 'Invalid token'}), 401
 
     return jsonify({
-        'token': access_token,
+        'token': token,
         'name': user['name'],
         'site': user['site'],
         'email': user['email']
@@ -97,35 +92,22 @@ def validate_credentials(email, password):
     return True
 
 
-def authenticate_user(email, password):
-    hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
+def authenticate_user(email, temp_password):
     user = mongo.db.users.find_one({'email': email})
-    print(user)
-    if not user.password == hashed_password:
-        return None
-    return user
+    if user:
+        hashed_password = user.get('password')
+        if bcrypt.check_password_hash(hashed_password, str(temp_password)):
+            return user
+    return False
 
 
-def validate_authorization_header(auth_header):
-    if not auth_header:
-        return False
-    try:
-        token_type, token = auth_header.split()
-        if token_type != 'Bearer':
-            raise ValueError('Token should be of type Bearer')
-        return token
-    except ValueError:
-        return False
-
-
-def validate_token(token, email):
-    try:
-        decoded_token = decode_token(token, options={"verify_signature": False})
-        if decoded_token['identity'] != email:
-            raise ValueError('Invalid token')
-        return True
-    except:
-        return False
+def validate_token(token):
+    token_type, token = token.split()
+    if not decode_token(token):
+        return False, 401
+    if token_type != 'Bearer':
+        raise ValueError('Token should be of type Bearer')
+    return True
 
 
 def _send_password_email(email, password):
