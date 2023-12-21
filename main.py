@@ -10,7 +10,7 @@ from utilits import generate_hash, generate_temporary_password, send_email
 from validate import validate_credentials, validate_registration_data, validate_token
 
 app = Flask(__name__)
-app.config['MONGO_URI'] = 'mongodb://localhost:27017/usersdb'
+app.config['MONGO_URI'] = 'mongodb://mongodb:27017/usersdb'
 app.config['JWT_SECRET_KEY'] = 'super-secret'
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(days=1)
 mongo = PyMongo(app)

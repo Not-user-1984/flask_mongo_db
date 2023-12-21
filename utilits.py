@@ -14,7 +14,7 @@ def send_email(email, data, user_msg):
     msg['From'] = 'your_email@example.com'
     msg['To'] = 'test@test.com'
 
-    with smtplib.SMTP('localhost', 1025) as smtp:
+    with smtplib.SMTP('mailhog', 1025) as smtp:
         smtp.send_message(msg)
 
 
