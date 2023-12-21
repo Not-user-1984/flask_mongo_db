@@ -17,13 +17,8 @@ Jwt токен сделан через секретный ключ и email, р�
 ```
 docker-compose up
 
-там  развернеться база mongo 
-
 и mailpit для смс на email
-http://localhost:8025
-
-запуск flask
-python main.py
+http://localhost/mailhog/
 
 ```
 
@@ -32,7 +27,7 @@ python main.py
 ``` 
 ### Регистрация post ####
 
-http://127.0.0.1:5000/sign-up/
+http://localhost/sign-up/
 {
 
 "name": "dccууввasds2",
@@ -51,7 +46,7 @@ http://localhost:8025
 ```
 ```
 ### Aвторизация ####
-http://127.0.0.1:5000/sign-in/
+http://localhost/sign-in/
 
 {
 
@@ -63,7 +58,7 @@ http://127.0.0.1:5000/sign-in/
 ````
 #### Смена пароля ####
 }
-http://127.0.0.1:5000/recovery/
+http://localhost/recovery/
 {
 
 "email": "fes2233@уmple.com"
