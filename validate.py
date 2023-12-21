@@ -34,6 +34,8 @@ def validate_credentials(email, password):
 
 
 def validate_token(token, email):
+    if not token:
+        raise ValueError('Non Bearer <token>')
     token_type, token = token.split()
     if email == decode_token(token)['sub']:
         return True, 200

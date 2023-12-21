@@ -1,4 +1,4 @@
-import hashlib
+
 from datetime import timedelta
 
 from flask import Flask, jsonify, request
@@ -6,7 +6,7 @@ from flask_bcrypt import Bcrypt
 from flask_jwt_extended import create_access_token, JWTManager
 from flask_pymongo import PyMongo
 
-from utilits import generate_temporary_password, send_email
+from utilits import generate_hash, generate_temporary_password, send_email
 from validate import validate_credentials, validate_registration_data, validate_token
 
 app = Flask(__name__)
@@ -18,8 +18,8 @@ bcrypt = Bcrypt(app)
 jwt = JWTManager(app)
 
 
-# Модель пользователя
 class User:
+    """Represents a user entity."""
     def __init__(self, name, phone, email, site, password, hash_reset):
         self.name = name
         self.phone = phone
@@ -31,6 +31,7 @@ class User:
 
 @app.route('/sign-up/', methods=['POST'])
 def sign_up():
+    """Handles user sign-up."""
     data = request.json
     name = data.get('name')
     phone = data.get('phone')
@@ -47,6 +48,7 @@ def sign_up():
 
     temporary_password = generate_temporary_password()
     hashed_password = bcrypt.generate_password_hash(temporary_password).decode('utf-8')
+
     new_user = User(name, phone, email, site, hashed_password, hash_reset)
     mongo.db.users.insert_one({
         'name': new_user.name,
@@ -54,8 +56,9 @@ def sign_up():
         'email': new_user.email,
         'site': new_user.site,
         'password': new_user.password,
-        'hash': None
+        'hash_reset': None
     })
+
     send_email(email, temporary_password, "Your Temporary Password")
     access_token = create_access_token(identity=email)
 
@@ -64,6 +67,7 @@ def sign_up():
 
 @app.route('/sign-in/', methods=['POST'])
 def sign_in():
+    """Handles user sign-in."""
     data = request.json
     email = data.get('email')
     temp_password = data.get('password')
@@ -76,9 +80,7 @@ def sign_in():
     if not user:
         return jsonify({'message': 'Invalid email or password'}), 401
 
-    token = request.headers.get('Authorization')
-    if not validate_token(token, email):
-        return jsonify({'message': 'Invalid token'}), 401
+    token = _get_token_and_validate(email)
 
     return jsonify({
         'token': token,
@@ -90,6 +92,7 @@ def sign_in():
 
 @app.route('/recovery/', methods=['POST'])
 def recovery():
+    """Handles user password recovery."""
     data = request.json
     email = data.get('email')
 
@@ -100,19 +103,21 @@ def recovery():
     if not existing_user:
         return jsonify({'message': 'User not found.'}), 404
 
-    hash_value = _generate_hash(email)
+    token = _get_token_and_validate(email)
+
+    hash_value = generate_hash(email)
     mongo.db.users.update_one(
         {'email': email},
         {'$set': {'hash_reset': hash_value}}
     )
     recovery_link = f"http://127.0.0.1:5000/recovery/{hash_value}/"
     send_email(email, recovery_link, 'Follow the links')
-    return jsonify({'message': 'Recovery link sent.', 'link': recovery_link}), 200
+    return jsonify({'message': 'Recovery link sent.', 'link': recovery_link, 'token': token}), 200
 
 
-# Смена пароля
 @app.route('/recovery/<hash>/', methods=['POST'])
 def change_password(hash):
+    """Handles password change after recovery."""
     data = request.json
     password = data.get('password')
 
@@ -120,6 +125,7 @@ def change_password(hash):
         return jsonify({'message': 'Password is required.'}), 400
 
     user = mongo.db.users.find_one({'hash_reset': hash})
+    print(user)
 
     if not user:
         return jsonify({'message': 'Invalid or expired recovery link.'}), 400
@@ -130,11 +136,13 @@ def change_password(hash):
 
     mongo.db.users.update_one({'hash_reset': hash}, {'$unset': {'hash_reset': ''}})
     user = mongo.db.users.find_one({'hash_reset': hash})
+    print(user)
 
     return jsonify({'token': access_token}), 200
 
 
 def _authenticate_user(email, temp_password):
+    """Authenticates a user."""
     user = mongo.db.users.find_one({'email': email})
     if user:
         hashed_password = user.get('password')
@@ -143,8 +151,13 @@ def _authenticate_user(email, temp_password):
     return False
 
 
-def _generate_hash(email):
-    return hashlib.sha256(email.encode()).hexdigest()
+def _get_token_and_validate(email):
+    """Gets and validates user token."""
+    token = request.headers.get('Authorization')
+
+    if not validate_token(token, email):
+        return jsonify({'message': 'Invalid token'}), 401
+    return token.split()
 
 
 if __name__ == '__main__':
