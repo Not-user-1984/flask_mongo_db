@@ -15,10 +15,13 @@ Jwt токен сделан через секретный ключ и email, р�
 ### Запуск:
 
 ```
-docker-compose up
+docker-compose up -d
+
+развернут на 
+http://158.160.28.202
 
 и mailpit для смс на email
-http://localhost/mailhog/
+http://158.160.28.202/mailhog/
 
 ```
 
@@ -27,14 +30,14 @@ http://localhost/mailhog/
 ``` 
 ### Регистрация post ####
 
-http://localhost/sign-up/
+http://158.160.28.202/sign-up/
 {
 
-"name": "dccууввasds2",
+"name": "test",
 
-"phone": "22caвв2242",
+"phone": "11111111",
 
-"email": "fes2233@уmple.com",
+"email": "test@sуmple.com",
 
 "site": "в.caaofdm"
 
@@ -42,30 +45,30 @@ http://localhost/sign-up/
 
 
 cмс на:
-http://localhost:8025
+http://158.160.28.202/mailhog/
 ```
 ```
 ### Aвторизация ####
-http://localhost/sign-in/
+http://158.160.28.202/sign-in/
 
 {
 
-"email": "fes2233@уmple.com",
+"email": "test@sуmple.com",
 
-"password": "4589a358y"
+"password": "код из http://192.168.31.41/mailhog/"
 
 ```
 ````
 #### Смена пароля ####
 }
-http://localhost/recovery/
+http://158.160.28.202/recovery/
 {
 
-"email": "fes2233@уmple.com"
+"email": "test@sуmple.com"
 
 }
 
-cысылка на:
-http://localhost:8025
+cысылка на будет:
+http://158.160.28.202/mailhog/
 
 ```
